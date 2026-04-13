@@ -20,7 +20,7 @@ class PlaceRepository:
         stmt = select(Place).where(Place.id.in_(ids))  # type: ignore[attr-defined]
         return list(self._s.exec(stmt).all())
 
-    def list(
+    def list_places(
         self,
         filters: PlaceFilters | None = None,
         limit: int = 50,

@@ -21,7 +21,7 @@ async def list_places(
     repo: PlaceRepository = Depends(get_place_repo),
 ) -> list[PlaceOut]:
     filters = PlaceFilters(country=country, city=city, category=category)
-    places = repo.list(filters=filters, limit=limit, offset=offset)
+    places = repo.list_places(filters=filters, limit=limit, offset=offset)
     images_by_place = repo.images_for([p.id for p in places])
     return [PlaceOut.from_model(p, images_by_place.get(p.id, [])) for p in places]
 
