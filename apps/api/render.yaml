@@ -1,0 +1,70 @@
+services:
+  - type: web
+    name: findfield-api
+    runtime: python
+    plan: free
+    rootDir: apps/api
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: APP_ENV
+        value: prod
+      - key: APP_LOG_LEVEL
+        value: INFO
+
+      # Vercel production URL(s), comma-separated. Fill after the web app is deployed.
+      - key: APP_CORS_ORIGINS
+        sync: false
+      # Regex that also matches Vercel preview deploys.
+      # e.g. https://findfield-web-.*\.vercel\.app
+      - key: APP_CORS_ORIGIN_REGEX
+        sync: false
+
+      # Supabase Postgres (use the session-pooler URI, port 5432).
+      # Format: postgresql+psycopg://postgres.<proj>:<pw>@aws-<region>.pooler.supabase.com:5432/postgres
+      - key: SUPABASE_DB_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: places
+
+      # Qdrant Cloud free cluster
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: QDRANT_COLLECTION
+        value: places
+
+      # Embeddings — Hugging Face Inference API (free tier)
+      - key: EMBEDDINGS_PROVIDER
+        value: huggingface
+      - key: EMBEDDINGS_TEXT_MODEL
+        value: BAAI/bge-m3
+      - key: EMBEDDINGS_IMAGE_MODEL
+        value: sentence-transformers/clip-ViT-B-32
+      - key: EMBEDDINGS_TEXT_DIM
+        value: "1024"
+      - key: EMBEDDINGS_IMAGE_DIM
+        value: "512"
+      - key: HUGGINGFACE_API_KEY
+        sync: false
+
+      # Chat — any OpenAI-compatible endpoint (Groq free tier by default)
+      - key: CHAT_PROVIDER
+        value: openai_compat
+      - key: CHAT_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: CHAT_MODEL
+        value: llama-3.1-8b-instant
+      - key: CHAT_API_KEY
+        sync: false

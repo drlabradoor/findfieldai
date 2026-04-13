@@ -1,0 +1,41 @@
+[
+  {
+    "title": "Miradouro da Senhora do Monte",
+    "short_description": "Quiet hilltop viewpoint over Lisbon",
+    "long_description": "A calm, uncrowded viewpoint on one of Lisbon's highest hills, with panoramic views of the old town and the Tagus river.",
+    "country": "Portugal",
+    "city": "Lisbon",
+    "latitude": 38.7192,
+    "longitude": -9.1345,
+    "category": "viewpoint",
+    "tags": ["quiet", "sunset", "free"],
+    "budget_level": "free",
+    "indoor_outdoor": "outdoor"
+  },
+  {
+    "title": "Kotor Old Town",
+    "short_description": "Medieval coastal town in a fjord-like bay",
+    "long_description": "A walled medieval town on the Bay of Kotor with narrow stone streets, churches, and a steep climb to the fortress above.",
+    "country": "Montenegro",
+    "city": "Kotor",
+    "latitude": 42.4247,
+    "longitude": 18.7712,
+    "category": "old_town",
+    "tags": ["coastal", "history", "walking"],
+    "budget_level": "low",
+    "indoor_outdoor": "both"
+  },
+  {
+    "title": "Teide National Park",
+    "short_description": "Volcanic landscape and Spain's highest peak",
+    "long_description": "Volcanic terrain on Tenerife with a cable-car to the crater rim, lava fields, and very dark skies at night.",
+    "country": "Spain",
+    "city": "Tenerife",
+    "latitude": 28.2724,
+    "longitude": -16.6426,
+    "category": "national_park",
+    "tags": ["nature", "hiking", "stargazing"],
+    "budget_level": "mid",
+    "indoor_outdoor": "outdoor"
+  }
+]
