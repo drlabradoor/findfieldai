@@ -1,14 +1,22 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from app.deps import get_ingestion_service, get_place_repo
 from app.models.place import Place
 from app.repositories.place_repo import PlaceRepository
 from app.schemas.place import PlaceCreate, PlaceFilters, PlaceOut
 from app.services.ingestion_service import IngestionService
+from app.services.osm_import_service import OSMImportError, import_city_from_osm
 
 router = APIRouter(prefix="/places", tags=["places"])
+
+
+class OSMImportRequest(BaseModel):
+    city: str
+    country: str
+    limit: int = Field(default=80, ge=1, le=500)
 
 
 @router.get("", response_model=list[PlaceOut])
@@ -50,4 +58,18 @@ async def seed_places(
         place = Place(**body.model_dump())
         await ingestion.ingest_place(place)
         created.append(place)
+    return [PlaceOut.from_model(p, []) for p in created]
+
+
+@router.post("/import-osm", response_model=list[PlaceOut])
+async def import_osm(
+    body: OSMImportRequest,
+    ingestion: IngestionService = Depends(get_ingestion_service),
+) -> list[PlaceOut]:
+    try:
+        created = await import_city_from_osm(
+            ingestion, body.city, body.country, body.limit
+        )
+    except OSMImportError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     return [PlaceOut.from_model(p, []) for p in created]
