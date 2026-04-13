@@ -7,7 +7,7 @@ from app.integrations.embeddings.base import EmbeddingsProvider
 
 logger = logging.getLogger(__name__)
 
-_HF_BASE = "https://api-inference.huggingface.co"
+_HF_BASE = "https://router.huggingface.co/hf-inference/models"
 
 
 class HuggingFaceEmbeddings(EmbeddingsProvider):
@@ -44,7 +44,7 @@ class HuggingFaceEmbeddings(EmbeddingsProvider):
         return vectors[0]
 
     async def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        url = f"{_HF_BASE}/pipeline/feature-extraction/{self._text_model}"
+        url = f"{_HF_BASE}/{self._text_model}/pipeline/feature-extraction"
         payload: dict[str, Any] = {
             "inputs": texts,
             "options": {"wait_for_model": True},
@@ -55,7 +55,7 @@ class HuggingFaceEmbeddings(EmbeddingsProvider):
         return [self._flatten(v) for v in data]
 
     async def embed_image(self, image_bytes: bytes) -> list[float]:
-        url = f"{_HF_BASE}/pipeline/feature-extraction/{self._image_model}"
+        url = f"{_HF_BASE}/{self._image_model}/pipeline/feature-extraction"
         resp = await self._client.post(
             url,
             content=image_bytes,

@@ -1,4 +1,4 @@
-# Deployment — Findfield AI
+  # Deployment — Findfield AI
 
 Target stack: **Vercel** (web) → **Render** (API) → **Supabase** (Postgres/Auth/Storage) + **Qdrant Cloud** (vectors) + **Hugging Face Inference** (embeddings) + **Groq** (chat LLM).
 
@@ -52,7 +52,7 @@ Create (or log into) free accounts on:
 
 1. https://huggingface.co/settings/tokens → New token → Read scope.
 2. `HUGGINGFACE_API_KEY=hf_...`.
-3. Confirm BGE-M3 is accessible: `curl -H "Authorization: Bearer hf_..." https://api-inference.huggingface.co/pipeline/feature-extraction/BAAI/bge-m3 -d '{"inputs":"hello"}'` should return a vector.
+3. Confirm BGE-M3 is accessible: `curl -H "Authorization: Bearer hf_..." https://router.huggingface.co/hf-inference/models/BAAI/bge-m3/pipeline/feature-extraction -d '{"inputs":"hello"}'` should return a vector. (HF sunset the old `api-inference.huggingface.co` host — the new one is served via `router.huggingface.co`.)
 
 > BGE-M3 produces 1024-d vectors. If you swap to another model, update `EMBEDDINGS_TEXT_MODEL` and `EMBEDDINGS_TEXT_DIM` together — the Qdrant collection will be created with the wrong size otherwise and you'll need to recreate it.
 
