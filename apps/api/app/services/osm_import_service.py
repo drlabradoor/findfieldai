@@ -20,7 +20,14 @@ from app.services.ingestion_service import IngestionService
 logger = logging.getLogger(__name__)
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+# Try the main Overpass endpoint first, then public mirrors. The main
+# instance frequently returns 504 for large city areas, and Kumi often
+# mirrors its load state, so private.coffee is the reliable fallback.
+OVERPASS_URLS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+]
 USER_AGENT = "findfieldai-osm-importer/0.1"
 
 # OSM (key, value) -> (our category, budget, indoor_outdoor).
@@ -158,6 +165,41 @@ def element_to_place(
     )
 
 
+async def _query_overpass(
+    client: httpx.AsyncClient, query: str
+) -> list[dict[str, Any]]:
+    """Try each Overpass mirror in order, return elements from the first
+    one that gives us valid JSON. Public Overpass instances routinely 504
+    on large city areas; fallbacks are not optional."""
+    last_error: str | None = None
+    for url in OVERPASS_URLS:
+        try:
+            r = await client.post(
+                url,
+                data={"data": query},
+                headers={"User-Agent": USER_AGENT},
+            )
+        except httpx.HTTPError as e:
+            last_error = f"{url}: {e}"
+            logger.warning("Overpass mirror failed: %s", last_error)
+            continue
+        if r.status_code != 200 or not r.headers.get("content-type", "").startswith(
+            "application/json"
+        ):
+            last_error = f"{url}: HTTP {r.status_code}"
+            logger.warning("Overpass mirror not usable: %s", last_error)
+            continue
+        try:
+            return r.json().get("elements", [])
+        except ValueError as e:
+            last_error = f"{url}: invalid JSON ({e})"
+            logger.warning("Overpass mirror returned bad JSON: %s", last_error)
+            continue
+    raise OSMImportError(
+        f"All Overpass mirrors failed. Last error: {last_error}"
+    )
+
+
 async def fetch_osm_elements(city: str, country: str) -> list[dict[str, Any]]:
     async with httpx.AsyncClient(timeout=120.0) as client:
         logger.info("Resolving '%s, %s' via Nominatim…", city, country)
@@ -166,13 +208,7 @@ async def fetch_osm_elements(city: str, country: str) -> list[dict[str, Any]]:
 
         query = build_overpass_query(area_id)
         logger.info("Querying Overpass (%d tag filters)…", len(OSM_MAPPING))
-        r = await client.post(
-            OVERPASS_URL,
-            data={"data": query},
-            headers={"User-Agent": USER_AGENT},
-        )
-        r.raise_for_status()
-        return r.json().get("elements", [])
+        return await _query_overpass(client, query)
 
 
 async def import_city_from_osm(
