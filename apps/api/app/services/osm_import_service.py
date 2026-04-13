@@ -75,14 +75,23 @@ async def resolve_city_relation(
     )
 
 
-def build_overpass_query(area_relation_id: int) -> str:
+def build_overpass_query(
+    area_relation_id: int,
+    tags: list[tuple[str, str]] | None = None,
+) -> str:
+    """Build an Overpass query for a subset of OSM tags inside a city area.
+
+    ``tags`` lets callers batch queries — public Overpass mirrors 504 when
+    asked for too many tag filters over a large area, so real runs chunk
+    the mapping into small groups and merge the results.
+    """
+    if tags is None:
+        tags = [pair for pair, _ in OSM_MAPPING]
     # Overpass area id = relation id + 3_600_000_000.
     area = area_relation_id + 3_600_000_000
-    filters = "\n  ".join(
-        f'nwr["{k}"="{v}"](area.a);' for (k, v), _ in OSM_MAPPING
-    )
+    filters = "\n  ".join(f'nwr["{k}"="{v}"](area.a);' for k, v in tags)
     return (
-        "[out:json][timeout:90];\n"
+        "[out:json][timeout:60];\n"
         f"area({area})->.a;\n"
         "(\n"
         f"  {filters}\n"
@@ -200,15 +209,52 @@ async def _query_overpass(
     )
 
 
+def _chunk(items: list, size: int) -> list[list]:
+    return [items[i : i + size] for i in range(0, len(items), size)]
+
+
 async def fetch_osm_elements(city: str, country: str) -> list[dict[str, Any]]:
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=90.0) as client:
         logger.info("Resolving '%s, %s' via Nominatim…", city, country)
         area_id = await resolve_city_relation(client, city, country)
         logger.info("Got OSM relation id=%s", area_id)
 
-        query = build_overpass_query(area_id)
-        logger.info("Querying Overpass (%d tag filters)…", len(OSM_MAPPING))
-        return await _query_overpass(client, query)
+        all_tags = [pair for pair, _ in OSM_MAPPING]
+        batches = _chunk(all_tags, 3)
+        logger.info(
+            "Querying Overpass in %d batches of ≤3 tag filters…", len(batches)
+        )
+
+        merged: list[dict[str, Any]] = []
+        seen_ids: set[tuple[str, int]] = set()
+        errors: list[str] = []
+        for idx, tag_group in enumerate(batches, 1):
+            query = build_overpass_query(area_id, tag_group)
+            try:
+                elements = await _query_overpass(client, query)
+            except OSMImportError as e:
+                errors.append(f"batch {idx} ({tag_group}): {e}")
+                logger.warning("Overpass batch %d failed, skipping: %s", idx, e)
+                continue
+            for el in elements:
+                key = (el.get("type", "node"), int(el.get("id", 0)))
+                if key in seen_ids:
+                    continue
+                seen_ids.add(key)
+                merged.append(el)
+            logger.info(
+                "Batch %d/%d: %d new elements (total=%d)",
+                idx,
+                len(batches),
+                len(elements),
+                len(merged),
+            )
+
+        if not merged and errors:
+            raise OSMImportError(
+                f"All Overpass batches failed. First error: {errors[0]}"
+            )
+        return merged
 
 
 async def import_city_from_osm(
