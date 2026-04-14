@@ -8,7 +8,11 @@ from app.models.place import Place
 from app.repositories.place_repo import PlaceRepository
 from app.schemas.place import PlaceCreate, PlaceFilters, PlaceOut
 from app.services.ingestion_service import IngestionService
-from app.services.osm_import_service import OSMImportError, import_city_from_osm
+from app.services.osm_import_service import (
+    OSMImportError,
+    import_city_from_osm,
+    is_latin_text,
+)
 
 router = APIRouter(prefix="/places", tags=["places"])
 
@@ -17,6 +21,16 @@ class OSMImportRequest(BaseModel):
     city: str
     country: str
     limit: int = Field(default=80, ge=1, le=500)
+
+
+class WipeRequest(BaseModel):
+    city: str | None = None
+    country: str | None = None
+
+
+class CleanupResult(BaseModel):
+    deleted: int
+    titles: list[str] = Field(default_factory=list)
 
 
 @router.get("", response_model=list[PlaceOut])
@@ -73,3 +87,43 @@ async def import_osm(
     except OSMImportError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     return [PlaceOut.from_model(p, []) for p in created]
+
+
+@router.post("/cleanup-nonlatin", response_model=CleanupResult)
+async def cleanup_nonlatin(
+    ingestion: IngestionService = Depends(get_ingestion_service),
+    repo: PlaceRepository = Depends(get_place_repo),
+) -> CleanupResult:
+    """Delete places whose title is not Latin-script (Cyrillic, Georgian, etc).
+
+    Walks the entire ``places`` table, identifies offenders via
+    ``is_latin_text``, removes them from Postgres and Qdrant in one pass.
+    Idempotent — safe to call repeatedly.
+    """
+    all_places = repo.list_places(limit=10000)
+    offenders = [p for p in all_places if not is_latin_text(p.title)]
+    await ingestion.delete_places([p.id for p in offenders])
+    return CleanupResult(
+        deleted=len(offenders),
+        titles=[p.title for p in offenders[:30]],
+    )
+
+
+@router.post("/wipe", response_model=CleanupResult)
+async def wipe_places(
+    body: WipeRequest,
+    ingestion: IngestionService = Depends(get_ingestion_service),
+    repo: PlaceRepository = Depends(get_place_repo),
+) -> CleanupResult:
+    """Bulk-delete places (optionally filtered by city/country).
+
+    Use before re-importing a city to avoid duplicate rows. Without
+    filters this nukes the entire collection — call carefully.
+    """
+    filters = PlaceFilters(city=body.city, country=body.country)
+    places = repo.list_places(filters=filters, limit=10000)
+    await ingestion.delete_places([p.id for p in places])
+    return CleanupResult(
+        deleted=len(places),
+        titles=[p.title for p in places[:30]],
+    )

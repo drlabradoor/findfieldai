@@ -28,6 +28,9 @@ class StubVectorStore(VectorStore):
     async def search_image(self, vector, limit, filters=None):
         return self._hits[:limit]
 
+    async def delete(self, ids):
+        pass
+
 
 @pytest.fixture
 def session() -> Session:

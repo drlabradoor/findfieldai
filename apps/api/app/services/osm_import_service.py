@@ -10,6 +10,7 @@ happen in one pass — same pipeline as the seed endpoint.
 from __future__ import annotations
 
 import logging
+import unicodedata
 from typing import Any
 
 import httpx
@@ -18,6 +19,26 @@ from app.models.place import BudgetLevel, IndoorOutdoor, Place
 from app.services.ingestion_service import IngestionService
 
 logger = logging.getLogger(__name__)
+
+
+def is_latin_text(text: str) -> bool:
+    """True if every alphabetic character in ``text`` is in a Latin script.
+
+    Used to filter OSM ``name``/``name:en`` values: we want titles a Latin-
+    alphabet user can read, so Cyrillic, Georgian, Greek, Arabic, CJK, etc.
+    are rejected. Diacritics, punctuation, digits and whitespace are fine.
+    """
+    if not text:
+        return False
+    for ch in text:
+        if not ch.isalpha():
+            continue
+        try:
+            if "LATIN" not in unicodedata.name(ch):
+                return False
+        except ValueError:
+            return False
+    return True
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 # Try the main Overpass endpoint first, then public mirrors. The main
@@ -112,7 +133,7 @@ def element_to_place(
 ) -> Place | None:
     tags = el.get("tags") or {}
     name = tags.get("name:en") or tags.get("name")
-    if not name:
+    if not name or not is_latin_text(name):
         return None
 
     category: str | None = None
@@ -257,30 +278,114 @@ async def fetch_osm_elements(city: str, country: str) -> list[dict[str, Any]]:
         return merged
 
 
+async def fetch_place_image_url(
+    client: httpx.AsyncClient, tags: dict[str, Any]
+) -> str | None:
+    """Best-effort photo lookup for an OSM POI.
+
+    Order: explicit ``image`` tag → Wikidata P18 (image) claim →
+    Wikipedia REST page summary thumbnail. All sources are free; failures
+    are swallowed because a missing image is not a fatal import error.
+    """
+    if tags.get("image"):
+        return str(tags["image"])
+
+    qid = tags.get("wikidata")
+    if isinstance(qid, str) and qid.startswith("Q"):
+        try:
+            r = await client.get(
+                f"https://www.wikidata.org/wiki/Special:EntityData/{qid}.json",
+                headers={"User-Agent": USER_AGENT},
+                timeout=15.0,
+            )
+            if r.status_code == 200:
+                entity = r.json().get("entities", {}).get(qid, {})
+                claims = entity.get("claims", {}).get("P18", [])
+                if claims:
+                    filename = claims[0]["mainsnak"]["datavalue"]["value"]
+                    encoded = filename.replace(" ", "_")
+                    return (
+                        "https://commons.wikimedia.org/wiki/"
+                        f"Special:FilePath/{encoded}?width=800"
+                    )
+        except (httpx.HTTPError, KeyError, ValueError) as e:
+            logger.debug("Wikidata image lookup failed for %s: %s", qid, e)
+
+    wp = tags.get("wikipedia")
+    if isinstance(wp, str) and ":" in wp:
+        lang, title = wp.split(":", 1)
+        try:
+            r = await client.get(
+                f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{title}",
+                headers={"User-Agent": USER_AGENT},
+                timeout=15.0,
+            )
+            if r.status_code == 200:
+                thumb = r.json().get("thumbnail") or {}
+                if thumb.get("source"):
+                    return str(thumb["source"])
+        except (httpx.HTTPError, ValueError) as e:
+            logger.debug("Wikipedia image lookup failed for %s: %s", wp, e)
+
+    return None
+
+
 async def import_city_from_osm(
     ingestion: IngestionService,
     city: str,
     country: str,
     limit: int = 80,
 ) -> list[Place]:
-    """Fetch POIs for a city from OSM and ingest them. Returns created places."""
+    """Fetch POIs for a city from OSM and ingest them.
+
+    Pipeline:
+      1. Pull elements from Overpass (chunked, mirrored).
+      2. Map each element to a ``Place`` (Latin-only titles).
+      3. Bucket by category, round-robin pick up to ``limit`` so the
+         resulting set is balanced across museums, parks, viewpoints,
+         cafes, etc. instead of being dominated by whichever batch ran
+         first.
+      4. For each picked place, attempt to fetch a free image
+         (Wikidata/Wikipedia) and ingest via ``IngestionService``.
+    """
     elements = await fetch_osm_elements(city, country)
     logger.info("Overpass returned %d raw elements", len(elements))
 
-    await ingestion.ensure_collection()
-
-    seen: set[str] = set()
-    created: list[Place] = []
+    seen_titles: set[str] = set()
+    by_category: dict[str, list[tuple[Place, dict[str, Any]]]] = {}
     for el in elements:
-        if len(created) >= limit:
-            break
         place = element_to_place(el, city, country)
         if place is None:
             continue
         key = place.title.strip().lower()
-        if key in seen:
+        if key in seen_titles:
             continue
-        seen.add(key)
-        await ingestion.ingest_place(place)
-        created.append(place)
+        seen_titles.add(key)
+        by_category.setdefault(place.category, []).append((place, el.get("tags") or {}))
+
+    logger.info(
+        "After Latin filter and dedup: %d candidates across %d categories",
+        sum(len(v) for v in by_category.values()),
+        len(by_category),
+    )
+
+    await ingestion.ensure_collection()
+    created: list[Place] = []
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        while len(created) < limit:
+            progressed = False
+            for cat in list(by_category.keys()):
+                bucket = by_category[cat]
+                if not bucket:
+                    continue
+                place, tags = bucket.pop(0)
+                image_url = await fetch_place_image_url(client, tags)
+                images = [image_url] if image_url else []
+                await ingestion.ingest_place(place, image_urls=images)
+                created.append(place)
+                progressed = True
+                if len(created) >= limit:
+                    break
+            if not progressed:
+                break
     return created

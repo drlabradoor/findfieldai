@@ -83,6 +83,14 @@ class QdrantVectorStore(VectorStore):
     ) -> list[VectorSearchHit]:
         return await self._search(self._image_vec, vector, limit, filters)
 
+    async def delete(self, ids: list[str]) -> None:
+        if not ids:
+            return
+        await self._client.delete(
+            collection_name=self._collection,
+            points_selector=qm.PointIdsList(points=ids),
+        )
+
     async def _search(
         self,
         vector_name: str,

@@ -47,6 +47,27 @@ class PlaceRepository:
         self._s.refresh(place)
         return place
 
+    def add_images(self, place_id: UUID, urls: list[str]) -> None:
+        for i, url in enumerate(urls):
+            self._s.add(
+                PlaceImage(
+                    place_id=place_id,
+                    image_url=url,
+                    storage_path=url,
+                    sort_order=i,
+                )
+            )
+        self._s.commit()
+
+    def delete(self, place_id: UUID) -> None:
+        stmt = select(PlaceImage).where(PlaceImage.place_id == place_id)
+        for img in self._s.exec(stmt).all():
+            self._s.delete(img)
+        place = self._s.get(Place, place_id)
+        if place:
+            self._s.delete(place)
+        self._s.commit()
+
     def images_for(self, place_ids: list[UUID]) -> dict[UUID, list[PlaceImage]]:
         if not place_ids:
             return {}

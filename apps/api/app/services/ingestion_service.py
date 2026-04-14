@@ -1,4 +1,5 @@
 import logging
+from uuid import UUID
 
 from app.integrations.embeddings.base import EmbeddingsProvider
 from app.integrations.vector_store.base import VectorStore
@@ -31,8 +32,20 @@ class IngestionService:
             image_dim=self._embeddings.image_dim,
         )
 
-    async def ingest_place(self, place: Place) -> None:
+    async def delete_places(self, place_ids: list[UUID]) -> None:
+        """Remove places from Postgres and Qdrant atomically (best-effort)."""
+        if not place_ids:
+            return
+        for pid in place_ids:
+            self._places.delete(pid)
+        await self._store.delete([str(pid) for pid in place_ids])
+
+    async def ingest_place(
+        self, place: Place, image_urls: list[str] | None = None
+    ) -> None:
         saved = self._places.create(place)
+        if image_urls:
+            self._places.add_images(saved.id, image_urls)
         text_for_embedding = _place_to_text(saved)
         text_vec = await self._embeddings.embed_text(text_for_embedding)
         await self._store.upsert(

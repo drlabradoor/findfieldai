@@ -48,3 +48,7 @@ class VectorStore(ABC):
         filters: dict[str, Any] | None = None,
     ) -> list[VectorSearchHit]:
         ...
+
+    @abstractmethod
+    async def delete(self, ids: list[str]) -> None:
+        ...
