@@ -111,7 +111,7 @@ async def cleanup_nonlatin(
     )
 
 
-@router.get("/debug-image")
+@router.post("/debug-image")
 async def debug_image(qid: str = Query(...)) -> dict:
     """Temporary: directly invoke fetch_place_image_url for a wikidata QID
     so we can see what the import-time image lookup actually returns from
