@@ -278,17 +278,44 @@ async def fetch_osm_elements(city: str, country: str) -> list[dict[str, Any]]:
         return merged
 
 
+def _wikidata_image_url(entity: dict[str, Any]) -> str | None:
+    """Defensive Wikidata P18 unwrap — returns None on any unexpected shape."""
+    claims = entity.get("claims")
+    if not isinstance(claims, dict):
+        return None
+    p18 = claims.get("P18")
+    if not isinstance(p18, list) or not p18:
+        return None
+    for claim in p18:
+        try:
+            mainsnak = claim.get("mainsnak", {})
+            if mainsnak.get("snaktype") != "value":
+                continue
+            datavalue = mainsnak.get("datavalue", {})
+            value = datavalue.get("value")
+            if isinstance(value, str) and value:
+                encoded = value.replace(" ", "_")
+                return (
+                    "https://commons.wikimedia.org/wiki/"
+                    f"Special:FilePath/{encoded}?width=800"
+                )
+        except (AttributeError, TypeError):
+            continue
+    return None
+
+
 async def fetch_place_image_url(
     client: httpx.AsyncClient, tags: dict[str, Any]
 ) -> str | None:
     """Best-effort photo lookup for an OSM POI.
 
     Order: explicit ``image`` tag → Wikidata P18 (image) claim →
-    Wikipedia REST page summary thumbnail. All sources are free; failures
-    are swallowed because a missing image is not a fatal import error.
+    Wikipedia REST page summary thumbnail. Any failure (network, parse,
+    unexpected shape) returns None — a missing image is non-fatal.
     """
-    if tags.get("image"):
-        return str(tags["image"])
+    image = tags.get("image")
+    if isinstance(image, str) and image.startswith(("http://", "https://")):
+        return image
 
     qid = tags.get("wikidata")
     if isinstance(qid, str) and qid.startswith("Q"):
@@ -299,22 +326,19 @@ async def fetch_place_image_url(
                 timeout=15.0,
             )
             if r.status_code == 200:
-                entity = r.json().get("entities", {}).get(qid, {})
-                claims = entity.get("claims", {}).get("P18", [])
-                if claims:
-                    filename = claims[0]["mainsnak"]["datavalue"]["value"]
-                    encoded = filename.replace(" ", "_")
-                    return (
-                        "https://commons.wikimedia.org/wiki/"
-                        f"Special:FilePath/{encoded}?width=800"
-                    )
-        except (httpx.HTTPError, KeyError, ValueError) as e:
+                data = r.json()
+                entity = (data.get("entities") or {}).get(qid)
+                if isinstance(entity, dict):
+                    url = _wikidata_image_url(entity)
+                    if url:
+                        return url
+        except Exception as e:  # noqa: BLE001 — image lookup must never crash import
             logger.debug("Wikidata image lookup failed for %s: %s", qid, e)
 
     wp = tags.get("wikipedia")
     if isinstance(wp, str) and ":" in wp:
-        lang, title = wp.split(":", 1)
         try:
+            lang, title = wp.split(":", 1)
             r = await client.get(
                 f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{title}",
                 headers={"User-Agent": USER_AGENT},
@@ -322,9 +346,10 @@ async def fetch_place_image_url(
             )
             if r.status_code == 200:
                 thumb = r.json().get("thumbnail") or {}
-                if thumb.get("source"):
-                    return str(thumb["source"])
-        except (httpx.HTTPError, ValueError) as e:
+                src = thumb.get("source")
+                if isinstance(src, str) and src:
+                    return src
+        except Exception as e:  # noqa: BLE001
             logger.debug("Wikipedia image lookup failed for %s: %s", wp, e)
 
     return None
@@ -371,6 +396,7 @@ async def import_city_from_osm(
 
     await ingestion.ensure_collection()
     created: list[Place] = []
+    failed = 0
     async with httpx.AsyncClient(timeout=20.0) as client:
         while len(created) < limit:
             progressed = False
@@ -379,13 +405,26 @@ async def import_city_from_osm(
                 if not bucket:
                     continue
                 place, tags = bucket.pop(0)
-                image_url = await fetch_place_image_url(client, tags)
-                images = [image_url] if image_url else []
-                await ingestion.ingest_place(place, image_urls=images)
-                created.append(place)
                 progressed = True
+                try:
+                    image_url = await fetch_place_image_url(client, tags)
+                    images = [image_url] if image_url else []
+                    await ingestion.ingest_place(place, image_urls=images)
+                except Exception as e:  # noqa: BLE001 — never let one bad POI kill the run
+                    failed += 1
+                    logger.warning(
+                        "Failed to ingest %r [%s]: %s: %s",
+                        place.title,
+                        place.category,
+                        type(e).__name__,
+                        e,
+                    )
+                    continue
+                created.append(place)
                 if len(created) >= limit:
                     break
             if not progressed:
                 break
+    if failed:
+        logger.info("Import finished with %d failed places", failed)
     return created

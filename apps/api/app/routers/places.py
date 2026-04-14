@@ -80,22 +80,12 @@ async def import_osm(
     body: OSMImportRequest,
     ingestion: IngestionService = Depends(get_ingestion_service),
 ) -> list[PlaceOut]:
-    import logging
-    import traceback
-
-    log = logging.getLogger(__name__)
     try:
         created = await import_city_from_osm(
             ingestion, body.city, body.country, body.limit
         )
     except OSMImportError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
-    except Exception as e:
-        log.exception("import_osm failed")
-        raise HTTPException(
-            status_code=500,
-            detail=f"{type(e).__name__}: {e}\n{traceback.format_exc()[-1500:]}",
-        ) from e
     return [PlaceOut.from_model(p, []) for p in created]
 
 
