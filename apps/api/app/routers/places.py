@@ -10,9 +10,11 @@ from app.schemas.place import PlaceCreate, PlaceFilters, PlaceOut
 from app.services.ingestion_service import IngestionService
 from app.services.osm_import_service import (
     OSMImportError,
+    fetch_place_image_url,
     import_city_from_osm,
     is_latin_text,
 )
+import httpx as _httpx_for_debug
 
 router = APIRouter(prefix="/places", tags=["places"])
 
@@ -107,6 +109,16 @@ async def cleanup_nonlatin(
         deleted=len(offenders),
         titles=[p.title for p in offenders[:30]],
     )
+
+
+@router.get("/debug-image")
+async def debug_image(qid: str = Query(...)) -> dict:
+    """Temporary: directly invoke fetch_place_image_url for a wikidata QID
+    so we can see what the import-time image lookup actually returns from
+    inside the Render container. Remove once image fetch is verified."""
+    async with _httpx_for_debug.AsyncClient(timeout=20.0) as client:
+        url = await fetch_place_image_url(client, {"wikidata": qid})
+    return {"qid": qid, "image_url": url}
 
 
 @router.post("/wipe", response_model=CleanupResult)
