@@ -124,7 +124,7 @@ export default function HomePage() {
             >
               <p className="text-sm whitespace-pre-wrap">{m.content}</p>
               {m.results && m.results.length > 0 && (
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="mt-3 -mx-4 px-4 flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-thin">
                   {m.results.map((h) => (
                     <PlaceCard key={h.place.id} place={h.place} score={h.score} matchReason={h.match_reason} />
                   ))}

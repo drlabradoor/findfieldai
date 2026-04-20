@@ -5,9 +5,9 @@ import { useEffect, useState } from "react";
 import { ConceptChips } from "./ConceptChips";
 
 const STAGES = [
-  { label: "Векторизую запрос", ms: 400 },
-  { label: "Ищу в базе мест", ms: 600 },
-  { label: "Анализирую совпадения", ms: 700 },
+  { label: "Векторизую запрос", ms: 1000 },
+  { label: "Ищу в базе мест", ms: 1500 },
+  { label: "Анализирую совпадения", ms: 1800 },
   { label: "Формирую ответ", ms: Infinity },
 ];
 

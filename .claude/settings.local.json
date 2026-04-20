@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(grep -E \"\\\\.\\(py|env\\)$\")",
+      "Bash(curl -s \"https://commons.wikimedia.org/w/api.php?action=query&generator=geosearch&ggsradius=300&ggslimit=5&ggscoord=38.7223|-9.1393&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json\")",
+      "Bash(curl -s \"https://commons.wikimedia.org/w/api.php?action=query&generator=geosearch&ggsnamespace=6&ggsradius=300&ggslimit=5&ggscoord=38.7223|-9.1393&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json\")",
+      "Bash(curl -s https://findfield-api.onrender.com/health)",
+      "Bash(curl -s -X POST \"https://findfield-api.onrender.com/places/backfill-images\" -H \"Content-Type: application/json\" -d '{\"limit\":2000}' --max-time 300)",
+      "Bash(curl -s \"https://findfield-api.onrender.com/places?limit=3\")",
+      "Bash(curl -s \"https://commons.wikimedia.org/w/api.php?action=query&generator=geosearch&ggsnamespace=6&ggsradius=500&ggslimit=5&ggscoord=38.7192%7C-9.1345&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json\")",
+      "Bash(git commit -m 'debug\\(places\\): add /debug-commons endpoint to probe geosearch from Render *)",
+      "Bash(curl -s -X POST \"https://findfield-api.onrender.com/places/debug-commons?lat=38.7192&lon=-9.1345\")",
+      "Bash(curl -s -v -X POST \"https://findfield-api.onrender.com/places/debug-commons?lat=38.7192&lon=-9.1345\")",
+      "Bash(curl -s -X POST \"https://findfield-api.onrender.com/places/backfill-images\" -H \"Content-Type: application/json\" -d '{\"limit\":2000}' --max-time 600)"
+    ]
+  }
+}
