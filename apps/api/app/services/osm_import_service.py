@@ -49,7 +49,10 @@ OVERPASS_URLS = [
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter",
 ]
-USER_AGENT = "findfieldai-osm-importer/0.1"
+USER_AGENT = (
+    "findfieldai/0.1 (https://github.com/drlabradoor/findfieldai; "
+    "drkapuler@gmail.com)"
+)
 
 # OSM (key, value) -> (our category, budget, indoor_outdoor).
 # Order matters: first match wins when an element has multiple mapped tags.

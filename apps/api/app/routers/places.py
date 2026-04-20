@@ -136,7 +136,7 @@ async def debug_image(qid: str = Query(...)) -> dict:
         ) as client:
             r = await client.get(
                 url,
-                headers={"User-Agent": "findfieldai-osm-importer/0.1"},
+                headers={"User-Agent": "findfieldai/0.1 (https://github.com/drlabradoor/findfieldai; drkapuler@gmail.com)"},
             )
             result["status"] = r.status_code
             result["content_type"] = r.headers.get("content-type")
@@ -220,7 +220,7 @@ async def debug_commons(lat: float = Query(...), lon: float = Query(...)) -> dic
                     "iiurlwidth": "800",
                     "format": "json",
                 },
-                headers={"User-Agent": "findfieldai-osm-importer/0.1"},
+                headers={"User-Agent": "findfieldai/0.1 (https://github.com/drlabradoor/findfieldai; drkapuler@gmail.com)"},
             )
             result["status"] = r.status_code
             result["url"] = str(r.url)
