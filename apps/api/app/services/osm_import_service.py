@@ -304,14 +304,61 @@ def _wikidata_image_url(entity: dict[str, Any]) -> str | None:
     return None
 
 
+_COMMONS_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
+
+
+async def _commons_geosearch_image(
+    client: httpx.AsyncClient, lat: float, lon: float
+) -> str | None:
+    """Find a nearby photo on Wikimedia Commons using geosearch.
+
+    Returns a thumbnail URL (800 px wide) or None on any failure.
+    """
+    try:
+        r = await client.get(
+            "https://commons.wikimedia.org/w/api.php",
+            params={
+                "action": "query",
+                "generator": "geosearch",
+                "ggsradius": "300",
+                "ggslimit": "10",
+                "ggscoord": f"{lat}|{lon}",
+                "prop": "imageinfo",
+                "iiprop": "url",
+                "iiurlwidth": "800",
+                "format": "json",
+            },
+            headers={"User-Agent": USER_AGENT},
+            timeout=15.0,
+        )
+        if r.status_code != 200:
+            return None
+        pages = (r.json().get("query") or {}).get("pages") or {}
+        for page in pages.values():
+            title = (page.get("title") or "").lower()
+            if not any(title.endswith(ext) for ext in _COMMONS_IMAGE_EXTS):
+                continue
+            infos = page.get("imageinfo") or []
+            if infos:
+                thumb = infos[0].get("thumburl") or infos[0].get("url")
+                if isinstance(thumb, str) and thumb:
+                    return thumb
+    except Exception as e:  # noqa: BLE001
+        logger.debug("Commons geosearch failed for %s,%s: %s", lat, lon, e)
+    return None
+
+
 async def fetch_place_image_url(
-    client: httpx.AsyncClient, tags: dict[str, Any]
+    client: httpx.AsyncClient,
+    tags: dict[str, Any],
+    lat: float | None = None,
+    lon: float | None = None,
 ) -> str | None:
     """Best-effort photo lookup for an OSM POI.
 
     Order: explicit ``image`` tag → Wikidata P18 (image) claim →
-    Wikipedia REST page summary thumbnail. Any failure (network, parse,
-    unexpected shape) returns None — a missing image is non-fatal.
+    Wikipedia REST page summary thumbnail → Wikimedia Commons geosearch
+    (requires lat/lon). Any failure returns None — a missing image is non-fatal.
     """
     image = tags.get("image")
     if isinstance(image, str) and image.startswith(("http://", "https://")):
@@ -351,6 +398,11 @@ async def fetch_place_image_url(
                     return src
         except Exception as e:  # noqa: BLE001
             logger.debug("Wikipedia image lookup failed for %s: %s", wp, e)
+
+    if lat is not None and lon is not None:
+        url = await _commons_geosearch_image(client, lat, lon)
+        if url:
+            return url
 
     return None
 
@@ -407,7 +459,7 @@ async def import_city_from_osm(
                 place, tags = bucket.pop(0)
                 progressed = True
                 try:
-                    image_url = await fetch_place_image_url(client, tags)
+                    image_url = await fetch_place_image_url(client, tags, lat=place.latitude, lon=place.longitude)
                     images = [image_url] if image_url else []
                     await ingestion.ingest_place(place, image_urls=images)
                 except Exception as e:  # noqa: BLE001 — never let one bad POI kill the run

@@ -14,6 +14,7 @@ from app.services.osm_import_service import (
     import_city_from_osm,
     is_latin_text,
 )
+import httpx
 import httpx as _httpx_for_debug
 
 router = APIRouter(prefix="/places", tags=["places"])
@@ -32,6 +33,18 @@ class WipeRequest(BaseModel):
 
 class CleanupResult(BaseModel):
     deleted: int
+    titles: list[str] = Field(default_factory=list)
+
+
+class BackfillRequest(BaseModel):
+    city: str | None = None
+    country: str | None = None
+    limit: int = Field(default=200, ge=1, le=2000)
+
+
+class BackfillResult(BaseModel):
+    checked: int
+    updated: int
     titles: list[str] = Field(default_factory=list)
 
 
@@ -113,12 +126,78 @@ async def cleanup_nonlatin(
 
 @router.post("/debug-image")
 async def debug_image(qid: str = Query(...)) -> dict:
-    """Temporary: directly invoke fetch_place_image_url for a wikidata QID
-    so we can see what the import-time image lookup actually returns from
-    inside the Render container. Remove once image fetch is verified."""
-    async with _httpx_for_debug.AsyncClient(timeout=20.0) as client:
-        url = await fetch_place_image_url(client, {"wikidata": qid})
-    return {"qid": qid, "image_url": url}
+    """Temporary: probe Wikidata directly from inside Render so we can see
+    what's going wrong with image lookup. Remove once verified."""
+    result: dict = {"qid": qid}
+    url = f"https://www.wikidata.org/wiki/Special:EntityData/{qid}.json"
+    try:
+        async with _httpx_for_debug.AsyncClient(
+            timeout=20.0, follow_redirects=True
+        ) as client:
+            r = await client.get(
+                url,
+                headers={"User-Agent": "findfieldai-osm-importer/0.1"},
+            )
+            result["status"] = r.status_code
+            result["content_type"] = r.headers.get("content-type")
+            result["body_size"] = len(r.content)
+            if r.status_code == 200:
+                try:
+                    data = r.json()
+                    entity = (data.get("entities") or {}).get(qid) or {}
+                    claims = entity.get("claims", {}) if isinstance(entity, dict) else {}
+                    p18 = claims.get("P18", []) if isinstance(claims, dict) else []
+                    result["has_p18"] = bool(p18)
+                    if p18:
+                        ms = p18[0].get("mainsnak", {})
+                        dv = ms.get("datavalue", {})
+                        result["p18_value"] = dv.get("value")
+                except Exception as e:  # noqa: BLE001
+                    result["json_error"] = f"{type(e).__name__}: {e}"
+            else:
+                result["body_preview"] = r.text[:300]
+    except Exception as e:  # noqa: BLE001
+        result["http_error"] = f"{type(e).__name__}: {e}"
+
+    # Also test what the real function returns
+    try:
+        async with _httpx_for_debug.AsyncClient(timeout=20.0) as client:
+            result["fn_result"] = await fetch_place_image_url(client, {"wikidata": qid})
+    except Exception as e:  # noqa: BLE001
+        result["fn_error"] = f"{type(e).__name__}: {e}"
+    return result
+
+
+@router.post("/backfill-images", response_model=BackfillResult)
+async def backfill_images(
+    body: BackfillRequest,
+    repo: PlaceRepository = Depends(get_place_repo),
+) -> BackfillResult:
+    """Fetch and store images for existing places that have none.
+
+    Idempotent — places that already have images are skipped.
+    Uses Wikimedia Commons geosearch (lat/lon) as the primary source.
+    """
+    filters = PlaceFilters(city=body.city, country=body.country)
+    places = repo.list_places(filters=filters, limit=body.limit)
+    images_by_place = repo.images_for([p.id for p in places])
+    without_image = [p for p in places if not images_by_place.get(p.id)]
+
+    updated_titles: list[str] = []
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        for place in without_image:
+            url = await fetch_place_image_url(
+                client, {}, lat=place.latitude, lon=place.longitude
+            )
+            if url:
+                repo.add_images(place.id, [url])
+                updated_titles.append(place.title)
+
+    return BackfillResult(
+        checked=len(without_image),
+        updated=len(updated_titles),
+        titles=updated_titles[:30],
+    )
 
 
 @router.post("/wipe", response_model=CleanupResult)
