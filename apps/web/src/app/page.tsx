@@ -195,8 +195,6 @@ export default function HomePage() {
                       <PlaceCard
                         key={h.place.id}
                         place={h.place}
-                        score={h.score}
-                        matchReason={h.match_reason}
                       />
                     ))}
                   </div>
