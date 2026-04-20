@@ -16,7 +16,7 @@ export type Place = {
   images: PlaceImage[];
 };
 
-export type SearchHit = { score: number; place: Place };
+export type SearchHit = { score: number; place: Place; match_reason?: string | null };
 
 export type SearchResponse = {
   query: string | null;
@@ -67,6 +67,7 @@ export type ChatMessage = { role: ChatRole; content: string };
 export type ChatQueryResponse = {
   answer: string;
   follow_up_question: string | null;
+  concepts: string[];
   results: SearchHit[];
 };
 

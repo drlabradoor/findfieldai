@@ -18,4 +18,5 @@ class ChatQueryRequest(BaseModel):
 class ChatQueryResponse(BaseModel):
     answer: str
     follow_up_question: Optional[str] = None
+    concepts: list[str] = Field(default_factory=list)
     results: list[PlaceSearchHit] = Field(default_factory=list)

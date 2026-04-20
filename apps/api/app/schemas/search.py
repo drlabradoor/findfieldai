@@ -25,6 +25,7 @@ class MultimodalSearchRequest(BaseModel):
 class PlaceSearchHit(BaseModel):
     score: float
     place: PlaceOut
+    match_reason: Optional[str] = None
 
 
 class SearchResponse(BaseModel):

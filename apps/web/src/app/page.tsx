@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { PipelineLoader } from "@/components/PipelineLoader";
 import { PlaceCard } from "@/components/PlaceCard";
 import {
   chatQuery,
@@ -28,6 +29,7 @@ export default function HomePage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [lastQuery, setLastQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -42,6 +44,7 @@ export default function HomePage() {
     const userMsg: Message = { id: nextId++, role: "user", content: trimmed };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
+    setLastQuery(trimmed);
     setLoading(true);
     setError(null);
 
@@ -123,7 +126,7 @@ export default function HomePage() {
               {m.results && m.results.length > 0 && (
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {m.results.map((h) => (
-                    <PlaceCard key={h.place.id} place={h.place} score={h.score} />
+                    <PlaceCard key={h.place.id} place={h.place} score={h.score} matchReason={h.match_reason} />
                   ))}
                 </div>
               )}
@@ -133,9 +136,7 @@ export default function HomePage() {
 
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3">
-              <span className="text-sm text-gray-400 animate-pulse">Думаю…</span>
-            </div>
+            <PipelineLoader query={lastQuery} />
           </div>
         )}
 
