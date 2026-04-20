@@ -200,6 +200,44 @@ async def backfill_images(
     )
 
 
+@router.post("/debug-commons")
+async def debug_commons(lat: float = Query(...), lon: float = Query(...)) -> dict:
+    """Temporary: probe Commons geosearch from inside Render."""
+    result: dict = {"lat": lat, "lon": lon}
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            r = await client.get(
+                "https://commons.wikimedia.org/w/api.php",
+                params={
+                    "action": "query",
+                    "generator": "geosearch",
+                    "ggsnamespace": "6",
+                    "ggsradius": "500",
+                    "ggslimit": "5",
+                    "ggscoord": f"{lat}|{lon}",
+                    "prop": "imageinfo",
+                    "iiprop": "url",
+                    "iiurlwidth": "800",
+                    "format": "json",
+                },
+                headers={"User-Agent": "findfieldai-osm-importer/0.1"},
+            )
+            result["status"] = r.status_code
+            result["url"] = str(r.url)
+            result["body_size"] = len(r.content)
+            if r.status_code == 200:
+                data = r.json()
+                pages = (data.get("query") or {}).get("pages") or {}
+                result["page_count"] = len(pages)
+                result["titles"] = [p.get("title") for p in pages.values()][:5]
+            else:
+                result["body_preview"] = r.text[:300]
+            result["fn_result"] = await fetch_place_image_url(client, {}, lat=lat, lon=lon)
+    except Exception as e:  # noqa: BLE001
+        result["error"] = f"{type(e).__name__}: {e}"
+    return result
+
+
 @router.post("/wipe", response_model=CleanupResult)
 async def wipe_places(
     body: WipeRequest,
