@@ -116,7 +116,7 @@ export default function HomePage() {
       <header className="py-4 border-b border-gray-200">
         <h1 className="text-xl font-semibold">Findfield AI</h1>
         <p className="text-sm text-gray-500">
-          Туристические места — результаты из реального индекса, не выдуманные
+          Туристические места рядом с вами по вашему запросу!
         </p>
       </header>
 
