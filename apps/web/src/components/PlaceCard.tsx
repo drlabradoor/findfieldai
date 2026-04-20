@@ -2,13 +2,15 @@ import type { Place } from "@/lib/api";
 
 export function PlaceCard({
   place,
+  score,
 }: {
   place: Place;
+  score?: number;
 }) {
   const cover = place.images?.[0]?.image_url;
 
   return (
-    <article className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+    <article className="min-w-[280px] rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow">
       {cover ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={cover} alt={place.title} className="w-full h-40 object-cover" />
@@ -19,7 +21,14 @@ export function PlaceCard({
       )}
 
       <div className="p-4">
-        <h3 className="font-semibold text-base">{place.title}</h3>
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="font-semibold text-base">{place.title}</h3>
+          {typeof score === "number" && (
+            <span className="shrink-0 text-xs text-indigo-500 font-medium">
+              {Math.round(score * 100)}%
+            </span>
+          )}
+        </div>
         <p className="text-sm text-gray-600">
           {place.city}, {place.country}
         </p>
