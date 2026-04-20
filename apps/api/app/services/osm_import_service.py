@@ -320,7 +320,8 @@ async def _commons_geosearch_image(
             params={
                 "action": "query",
                 "generator": "geosearch",
-                "ggsradius": "300",
+                "ggsnamespace": "6",
+                "ggsradius": "500",
                 "ggslimit": "10",
                 "ggscoord": f"{lat}|{lon}",
                 "prop": "imageinfo",
