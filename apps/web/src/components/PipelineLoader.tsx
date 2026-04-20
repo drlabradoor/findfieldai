@@ -4,42 +4,43 @@ import { useEffect, useState } from "react";
 
 import { ConceptChips } from "./ConceptChips";
 
-const STAGES = [
-  { label: "Векторизую запрос", ms: 1000 },
-  { label: "Ищу в базе мест", ms: 1500 },
-  { label: "Анализирую совпадения", ms: 1800 },
-  { label: "Формирую ответ", ms: Infinity },
-];
+const STAGES = ["Векторизую запрос", "Ищу в базе мест", "Анализирую совпадения", "Формирую ответ"];
+const STAGE_DURATIONS_MS = [1000, 1500, 1800];
 
-export function PipelineLoader({ query }: { query: string }) {
+export function PipelineLoader({
+  query,
+  isComplete,
+}: {
+  query: string;
+  isComplete: boolean;
+}) {
   const [activeStage, setActiveStage] = useState(0);
 
   useEffect(() => {
     setActiveStage(0);
-    let current = 0;
-    const advance = () => {
-      const next = current + 1;
-      if (next < STAGES.length && STAGES[current].ms !== Infinity) {
-        const t = setTimeout(() => {
-          current = next;
-          setActiveStage(next);
-          advance();
-        }, STAGES[current].ms);
-        return t;
-      }
-    };
-    const t = advance();
-    return () => { if (t) clearTimeout(t); };
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let cumulative = 0;
+    STAGE_DURATIONS_MS.forEach((ms, i) => {
+      cumulative += ms;
+      timers.push(setTimeout(() => setActiveStage(i + 1), cumulative));
+    });
+    return () => timers.forEach(clearTimeout);
   }, [query]);
 
+  useEffect(() => {
+    if (isComplete) {
+      setActiveStage((s) => Math.max(s, STAGES.length));
+    }
+  }, [isComplete]);
+
   return (
-    <div className="bg-transparent border-none rounded-2xl px-4 py-3 min-w-[220px]">
+    <div className="min-w-[220px]">
       <div className="space-y-1.5">
-        {STAGES.map((stage, i) => {
+        {STAGES.map((label, i) => {
           const done = i < activeStage;
           const active = i === activeStage;
           return (
-            <div key={stage.label} className="flex items-center gap-2">
+            <div key={label} className="flex items-center gap-2">
               <span className="w-4 text-center text-xs">
                 {done ? (
                   <span className="text-gray-400">✓</span>
@@ -58,10 +59,8 @@ export function PipelineLoader({ query }: { query: string }) {
                     : "text-gray-400"
                 }`}
               >
-                {stage.label}
-                {active && (
-                  <span className="animate-pulse">...</span>
-                )}
+                {label}
+                {active && <span className="animate-pulse">...</span>}
               </span>
             </div>
           );
