@@ -14,6 +14,7 @@ type Message = {
   id: number;
   role: "user" | "assistant";
   content: string;
+  displayedContent?: string;
   results?: SearchHit[];
 };
 
@@ -36,6 +37,34 @@ export default function HomePage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage || lastMessage.role !== "assistant") return;
+
+    const fullContent = lastMessage.content;
+    const displayedContent = lastMessage.displayedContent || "";
+
+    if (displayedContent.length >= fullContent.length) return;
+
+    const timer = setTimeout(() => {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === lastMessage.id
+            ? {
+                ...msg,
+                displayedContent: fullContent.slice(
+                  0,
+                  (displayedContent.length || 0) + 1
+                ),
+              }
+            : msg
+        )
+      );
+    }, 30);
+
+    return () => clearTimeout(timer);
+  }, [messages]);
 
   async function send(text: string) {
     const trimmed = text.trim();
@@ -122,7 +151,11 @@ export default function HomePage() {
                   : "bg-white border border-gray-200 text-gray-900"
               }`}
             >
-              <p className="text-sm whitespace-pre-wrap">{m.content}</p>
+              <p className="text-sm whitespace-pre-wrap">
+                {m.role === "assistant" && m.displayedContent !== undefined
+                  ? m.displayedContent
+                  : m.content}
+              </p>
               {m.results && m.results.length > 0 && (
                 <div className="mt-3 -mx-4 px-4 flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-thin">
                   {m.results.map((h) => (
