@@ -33,7 +33,7 @@ export function PipelineLoader({ query }: { query: string }) {
   }, [query]);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3 min-w-[220px]">
+    <div className="bg-transparent border-none rounded-2xl px-4 py-3 min-w-[220px]">
       <div className="space-y-1.5">
         {STAGES.map((stage, i) => {
           const done = i < activeStage;
@@ -42,9 +42,9 @@ export function PipelineLoader({ query }: { query: string }) {
             <div key={stage.label} className="flex items-center gap-2">
               <span className="w-4 text-center text-xs">
                 {done ? (
-                  <span className="text-green-500">✓</span>
+                  <span className="text-gray-400">✓</span>
                 ) : active ? (
-                  <span className="text-indigo-500 animate-pulse">◆</span>
+                  <span className="text-gray-500 animate-pulse">◆</span>
                 ) : (
                   <span className="text-gray-300">◇</span>
                 )}
@@ -52,10 +52,10 @@ export function PipelineLoader({ query }: { query: string }) {
               <span
                 className={`text-xs transition-colors duration-300 ${
                   done
-                    ? "text-gray-400"
+                    ? "text-gray-500"
                     : active
-                    ? "text-indigo-600 font-medium"
-                    : "text-gray-300"
+                    ? "text-gray-600 font-medium"
+                    : "text-gray-400"
                 }`}
               >
                 {stage.label}
