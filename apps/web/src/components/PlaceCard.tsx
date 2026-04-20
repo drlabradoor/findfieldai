@@ -24,7 +24,7 @@ export function PlaceCard({
   const cover = place.images?.[0]?.image_url;
 
   return (
-    <article className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+    <article className="min-w-[280px] rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow">
       {cover ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={cover} alt={place.title} className="w-full h-40 object-cover" />
