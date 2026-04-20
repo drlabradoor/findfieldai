@@ -61,10 +61,19 @@ export async function searchImage(
   return res.json();
 }
 
+export type ChatRole = "user" | "assistant" | "system";
+export type ChatMessage = { role: ChatRole; content: string };
+
+export type ChatQueryResponse = {
+  answer: string;
+  follow_up_question: string | null;
+  results: SearchHit[];
+};
+
 export async function chatQuery(
   message: string,
-  history: { role: "user" | "assistant" | "system"; content: string }[] = [],
-) {
+  history: ChatMessage[] = [],
+): Promise<ChatQueryResponse> {
   const res = await fetch(`${BASE}/chat/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
